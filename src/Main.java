@@ -23,7 +23,10 @@ public class Main {
         clientesUnicos.add(pedro);
 
         clientes.guardar(ana.getDocumento(), ana);
+        clientes.guardar(anaWhatsApp.getDocumento(), anaWhatsApp);
         clientes.guardar(pedro.getDocumento(), pedro);
+
+        System.out.println("Clientes en repositorio: " + clientes.cantidad());
 
         System.out.println("Clientes unicos: "
                 + clientesUnicos.size());
@@ -76,7 +79,11 @@ public class Main {
         Pedido p1 = new Pedido("O1", ana, "Centro", hoy);
         p1.agregarProducto(hamburguesa, 3);
         p1.agregarProducto(gaseosa, 2);
-        p1.aplicarDescuento(10);
+        p1.setPromocion(new DescuentoPorcentaje(10));
+        p1.suscribir(new Notificacion("Cocina"));
+        p1.suscribir(new Notificacion("Cliente Ana"));
+        p1.suscribir(new Notificacion("Repartidor Carlos"));
+
         p1.cambiarEstado("EN PREPARACION");
 
         Pedido p2 = new Pedido("O2", ana, "Norte", hoy);

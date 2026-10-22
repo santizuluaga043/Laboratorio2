@@ -2,6 +2,7 @@ import java.time.LocalDate;
 import java.util.*;
 
 public class Pedido {
+
     private final String id;
     private final Cliente cliente;
     private final String sede;
@@ -10,11 +11,16 @@ public class Pedido {
     private final Map<Producto, Integer> cantidades =
             new LinkedHashMap<>();
 
+    private final List<ObservadorPedido> observadores =
+            new ArrayList<>();
+
+    private EstrategiaPromocion promocion = new SinPromocion();
+
     private String estado = "RECIBIDO";
-    private double descuento = 0;
 
     public Pedido(String id, Cliente cliente,
                   String sede, LocalDate fecha) {
+
         this.id = id;
         this.cliente = cliente;
         this.sede = sede;
@@ -42,40 +48,64 @@ public class Pedido {
     }
 
     public Map<Producto, Integer> getCantidades() {
-        return Collections.unmodifiableMap(cantidades);
+        return new LinkedHashMap<>(cantidades);
     }
 
+    // Agregar productos al pedido
     public void agregarProducto(Producto producto, int cantidad) {
+
         if (cantidad <= 0) {
             throw new IllegalArgumentException("Cantidad invalida");
         }
 
-        cantidades.merge(producto, cantidad, Integer::sum);
+        if (cantidades.containsKey(producto)) {
+
+            int cantidadActual = cantidades.get(producto);
+
+            cantidades.put(producto, cantidadActual + cantidad);
+
+        } else {
+
+            cantidades.put(producto, cantidad);
+        }
     }
 
-    public void aplicarDescuento(double porcentaje) {
-        if (porcentaje < 0 || porcentaje > 100) {
-            throw new IllegalArgumentException("Descuento invalido");
+    // Asignar una promocion
+    public void setPromocion(EstrategiaPromocion promocion) {
+
+        if (promocion == null) {
+            throw new IllegalArgumentException("Promocion invalida");
         }
 
-        descuento = porcentaje;
+        this.promocion = promocion;
     }
 
+    // Calcular subtotal
     public double subtotal() {
+
         return cantidades.entrySet().stream()
-                .mapToDouble(e ->
-                        e.getKey().getPrecio() * e.getValue())
-                .sum();
+                .map(e -> e.getKey().getPrecio() * e.getValue())
+                .reduce(0.0, (a, b) -> a + b);
     }
 
+    // Calcular total con promocion
     public double total() {
-        return subtotal() * (1 - descuento / 100);
+        return promocion.aplicar(subtotal());
     }
 
+    // Registrar interesados en las notificaciones
+    public void suscribir(ObservadorPedido observador) {
+        observadores.add(observador);
+    }
+
+    // Cambiar estado y notificar
     public void cambiarEstado(String nuevoEstado) {
+
         estado = nuevoEstado;
-        System.out.println("Pedido " + id
-                + " cambio a: " + estado);
+
+        for (ObservadorPedido observador : observadores) {
+            observador.actualizar(id, estado);
+        }
     }
 }
 

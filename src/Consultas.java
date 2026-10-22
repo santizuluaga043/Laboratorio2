@@ -7,68 +7,107 @@ public class Consultas {
     private Consultas() {
     }
 
-    // Wildcard: recibe platos, bebidas, combos u otros productos.
+    // Sumar precios de cualquier tipo de producto
     public static double sumarPrecios(
             List<? extends Producto> productos) {
 
         return productos.stream()
-                .mapToDouble(Producto::getPrecio)
-                .sum();
+                .map(Producto::getPrecio)
+                .reduce(0.0, (a, b) -> a + b);
     }
 
-    // Ordenar por precio descendente y luego nombre.
+    // Ordenar menu por precio descendente y luego nombre
     public static List<Producto> menuOrdenado(
             Collection<? extends Producto> menu) {
 
-        return menu.stream()
-                .sorted(
-                        Comparator.comparingDouble(Producto::getPrecio)
-                                .reversed()
-                                .thenComparing(Producto::getNombre)
-                )
-                .collect(Collectors.toList());
+        List<Producto> lista = new ArrayList<>(menu);
+
+        Collections.sort(lista, new Comparator<Producto>() {
+            @Override
+            public int compare(Producto p1, Producto p2) {
+
+                int resultado = Double.compare(
+                        p2.getPrecio(), p1.getPrecio());
+
+                if (resultado == 0) {
+                    return p1.getNombre().compareTo(p2.getNombre());
+                }
+
+                return resultado;
+            }
+        });
+
+        return lista;
     }
 
-    // Ordenar repartidores por calificacion y entregas.
+    // Ordenar repartidores por calificacion y entregas
     public static List<Repartidor> repartidoresOrdenados(
             Collection<Repartidor> repartidores) {
 
-        return repartidores.stream()
-                .sorted(
-                        Comparator.comparingDouble(
-                                        Repartidor::getCalificacion)
-                                .reversed()
-                                .thenComparing(
-                                        Comparator.comparingInt(
-                                                        Repartidor::getEntregas)
-                                                .reversed()
-                                )
-                )
-                .collect(Collectors.toList());
+        List<Repartidor> lista = new ArrayList<>(repartidores);
+
+        Collections.sort(lista, new Comparator<Repartidor>() {
+            @Override
+            public int compare(Repartidor r1, Repartidor r2) {
+
+                int resultado = Double.compare(
+                        r2.getCalificacion(), r1.getCalificacion());
+
+                if (resultado == 0) {
+                    return Integer.compare(
+                            r2.getEntregas(), r1.getEntregas());
+                }
+
+                return resultado;
+            }
+        });
+
+        return lista;
     }
 
-    // Sumar la facturacion de cada sede.
+    // Calcular facturacion por sede
     public static Map<String, Double> facturacionPorSede(
             Collection<Pedido> pedidos) {
 
-        return pedidos.stream()
-                .collect(Collectors.groupingBy(
-                        Pedido::getSede,
-                        Collectors.summingDouble(Pedido::total)
-                ));
+        Map<String, Double> facturacion = new HashMap<>();
+
+        for (Pedido pedido : pedidos) {
+
+            String sede = pedido.getSede();
+            double total = pedido.total();
+
+            if (facturacion.containsKey(sede)) {
+
+                double anterior = facturacion.get(sede);
+                facturacion.put(sede, anterior + total);
+
+            } else {
+
+                facturacion.put(sede, total);
+            }
+        }
+
+        return facturacion;
     }
 
-    // Buscar el pedido mas caro de un cliente.
+    // Encontrar el pedido mas caro de un cliente
     public static Optional<Pedido> pedidoMasCaroDeCliente(
             Collection<Pedido> pedidos, String documento) {
 
         return pedidos.stream()
                 .filter(p -> p.getCliente()
                         .getDocumento().equals(documento))
-                .max(Comparator.comparingDouble(Pedido::total));
+                .max(new Comparator<Pedido>() {
+                    @Override
+                    public int compare(Pedido p1, Pedido p2) {
+
+                        return Double.compare(
+                                p1.total(), p2.total());
+                    }
+                });
     }
 
-    // Obtener los 3 platos mas vendidos en un periodo.
+    // Obtener los 3 platos mas vendidos de la semana
     public static List<Map.Entry<Plato, Integer>>
     tresPlatosMasVendidos(Collection<Pedido> pedidos,
                           LocalDate inicio, LocalDate fin) {
@@ -78,25 +117,80 @@ public class Consultas {
         pedidos.stream()
                 .filter(p -> !p.getFecha().isBefore(inicio)
                         && !p.getFecha().isAfter(fin))
-                .forEach(p ->
-                        p.getCantidades().forEach((producto, cantidad) -> {
-                            if (producto instanceof Plato) {
-                                ventas.merge(
-                                        (Plato) producto,
-                                        cantidad,
-                                        Integer::sum
-                                );
-                            }
-                        })
-                );
+                .forEach(p -> {
 
-        return ventas.entrySet().stream()
-                .sorted(
-                        Map.Entry.<Plato, Integer>comparingByValue()
-                                .reversed()
-                )
+                    for (Map.Entry<Producto, Integer> entrada
+                            : p.getCantidades().entrySet()) {
+
+                        Producto producto = entrada.getKey();
+                        int cantidad = entrada.getValue();
+
+                        // Platos vendidos directamente
+                        if (producto instanceof Plato) {
+
+                            Plato plato = (Plato) producto;
+
+                            if (ventas.containsKey(plato)) {
+
+                                int anterior = ventas.get(plato);
+                                ventas.put(plato, anterior + cantidad);
+
+                            } else {
+
+                                ventas.put(plato, cantidad);
+                            }
+                        }
+
+                        // Platos incluidos en combos
+                        if (producto instanceof Combo) {
+
+                            Combo combo = (Combo) producto;
+
+                            for (Producto componente
+                                    : combo.getComponentes()) {
+
+                                if (componente instanceof Plato) {
+
+                                    Plato plato = (Plato) componente;
+
+                                    if (ventas.containsKey(plato)) {
+
+                                        int anterior = ventas.get(plato);
+                                        ventas.put(plato,
+                                                anterior + cantidad);
+
+                                    } else {
+
+                                        ventas.put(plato, cantidad);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+        // Ordenar platos por cantidad vendida
+        List<Map.Entry<Plato, Integer>> lista =
+                new ArrayList<>(ventas.entrySet());
+
+        Collections.sort(lista,
+                new Comparator<Map.Entry<Plato, Integer>>() {
+                    @Override
+                    public int compare(
+                            Map.Entry<Plato, Integer> e1,
+                            Map.Entry<Plato, Integer> e2) {
+
+                        return Integer.compare(
+                                e2.getValue(), e1.getValue());
+                    }
+                });
+
+        // Devolver los primeros 3
+        return lista.stream()
                 .limit(3)
                 .collect(Collectors.toList());
     }
 }
+
+
 
